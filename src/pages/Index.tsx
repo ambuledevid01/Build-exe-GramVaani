@@ -267,36 +267,36 @@ const Index = () => {
 
       {/* Voice Control - Fixed at bottom */}
       <div className="fixed bottom-0 left-0 right-0 z-40 pb-safe-bottom">
-        <div className="bg-background/95 backdrop-blur-xl border-t border-border shadow-lg">
-          <div className="container mx-auto px-4 py-4 sm:py-6">
-            <div className="flex flex-col items-center gap-3 sm:gap-4">
+        <div className="flex justify-center px-4 py-3">
+          <div className="bg-background/95 backdrop-blur-xl border border-border shadow-lg rounded-2xl px-6 py-3 max-w-xs w-full">
+            <div className="flex flex-col items-center gap-2">
               {/* Voice Wave Visualization */}
-              <VoiceWave isActive={isListening || isSpeaking} className="h-6 sm:h-8" />
+              <VoiceWave isActive={isListening || isSpeaking} className="h-5" />
               
               {/* Live transcript display */}
               {(isListening || partialTranscript) && (
-                <div className="bg-muted/50 rounded-lg px-4 py-2 max-w-xs text-center">
-                  <p className="text-sm text-foreground">
+                <div className="bg-muted/50 rounded-lg px-3 py-1.5 max-w-full text-center">
+                  <p className="text-xs text-foreground truncate">
                     {partialTranscript || "..."}
                   </p>
                 </div>
               )}
               
               {/* Listening indicator */}
-              <p className="text-sm sm:text-base text-muted-foreground font-medium text-center flex items-center gap-2">
+              <p className="text-xs text-muted-foreground font-medium text-center flex items-center gap-1.5">
                 {isConnecting ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                    <Loader2 className="w-3 h-3 animate-spin text-primary" />
                     कनेक्ट हो रहा है...
                   </>
                 ) : isSpeaking ? (
                   <>
-                    <Volume2 className="w-4 h-4 animate-pulse text-primary" />
+                    <Volume2 className="w-3 h-3 animate-pulse text-primary" />
                     बोल रहा हूं...
                   </>
                 ) : isProcessing ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                    <Loader2 className="w-3 h-3 animate-spin text-primary" />
                     समझ रहा हूं...
                   </>
                 ) : isListening ? (
@@ -314,8 +314,8 @@ const Index = () => {
               />
 
               {/* Help text */}
-              <div className="flex items-center gap-2 text-[11px] sm:text-xs text-muted-foreground">
-                <HelpCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                <HelpCircle className="w-3 h-3" />
                 <span>Say "Help" for commands</span>
               </div>
             </div>
