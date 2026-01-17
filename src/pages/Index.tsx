@@ -10,10 +10,12 @@ import { TransactionItem } from "@/components/TransactionItem";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { StatusBar } from "@/components/StatusBar";
 import { ConversationBubble } from "@/components/ConversationBubble";
+import { VoicePinSetup } from "@/components/VoicePinSetup";
 import { useAuth } from "@/hooks/useAuth";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 import { useSpeechToText } from "@/hooks/useSpeechToText";
 import { useBanking } from "@/hooks/useBanking";
+import { useVoicePin } from "@/hooks/useVoicePin";
 import { formatDistanceToNow } from "date-fns";
 
 const Index = () => {
@@ -29,11 +31,13 @@ const Index = () => {
     partialTranscript 
   } = useSpeechToText();
   const { balance, transactions, isLoading: bankingLoading } = useBanking();
+  const { hasPinSet, checkPinStatus } = useVoicePin();
   
   const [selectedLanguage, setSelectedLanguage] = useState("hi");
   const [isOnline] = useState(true);
   const [isVoiceVerified] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showPinSetup, setShowPinSetup] = useState(false);
   const lastProcessedTranscript = useRef<string>("");
   
   const [conversation, setConversation] = useState([
@@ -46,6 +50,22 @@ const Index = () => {
       navigate("/auth");
     }
   }, [user, loading, navigate]);
+
+  // Check PIN status and prompt setup after login
+  useEffect(() => {
+    const checkAndPromptPin = async () => {
+      if (user && !loading && !bankingLoading) {
+        const hasPin = await checkPinStatus();
+        if (hasPin === false) {
+          // Small delay to let the page load first
+          setTimeout(() => {
+            setShowPinSetup(true);
+          }, 1000);
+        }
+      }
+    };
+    checkAndPromptPin();
+  }, [user, loading, bankingLoading, checkPinStatus]);
 
   // Process the transcript when user stops speaking
   const processCommand = useCallback(async (userMessage: string) => {
@@ -151,6 +171,16 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Voice PIN Setup Modal - shown after first login */}
+      {showPinSetup && (
+        <VoicePinSetup 
+          onComplete={() => {
+            setShowPinSetup(false);
+            speak("आपका सुरक्षा PIN सेट हो गया! अब आप सुरक्षित लेनदेन कर सकते हैं।");
+          }} 
+          onCancel={() => setShowPinSetup(false)} 
+        />
+      )}
       {/* Header */}
       <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-xl border-b border-border safe-area-top">
         <div className="container mx-auto px-4 py-3 sm:py-4">

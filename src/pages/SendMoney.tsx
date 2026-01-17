@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, HelpCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { ArrowLeft, User, HelpCircle, CheckCircle2, Loader2, Shield } from "lucide-react";
 import { VoiceButton } from "@/components/VoiceButton";
 import { VoiceWave } from "@/components/VoiceWave";
 import { ConversationBubble } from "@/components/ConversationBubble";
+import { VoicePinSetup } from "@/components/VoicePinSetup";
+import { VoicePinVerify } from "@/components/VoicePinVerify";
 import { useSpeechToText } from "@/hooks/useSpeechToText";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 import { useBanking } from "@/hooks/useBanking";
+import { useVoicePin } from "@/hooks/useVoicePin";
 import { toast } from "sonner";
 
 const SendMoney = () => {
@@ -21,17 +24,24 @@ const SendMoney = () => {
   } = useSpeechToText();
   const { speak, isSpeaking, stop: stopSpeaking } = useTextToSpeech();
   const { balance, createTransaction, isCreatingTransaction } = useBanking();
+  const { hasPinSet, checkPinStatus } = useVoicePin();
   
-  const [step, setStep] = useState<"recipient" | "amount" | "confirm" | "success">("recipient");
+  const [step, setStep] = useState<"recipient" | "amount" | "confirm" | "pin_verify" | "success">("recipient");
   const [recipient, setRecipient] = useState("");
   const [recipientPhone, setRecipientPhone] = useState("");
   const [amount, setAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showPinSetup, setShowPinSetup] = useState(false);
   const lastProcessedTranscript = useRef<string>("");
   
   const [conversation, setConversation] = useState([
     { message: "किसे पैसे भेजना है? नाम या फोन नंबर बोलें।", isUser: false, timestamp: "अभी" }
   ]);
+
+  // Check PIN status on mount
+  useEffect(() => {
+    checkPinStatus();
+  }, [checkPinStatus]);
 
   const recentContacts = [
     { name: "राम कुमार", phone: "9876543210", initial: "र" },
@@ -130,37 +140,18 @@ const SendMoney = () => {
           lowerInput.includes("yes") || lowerInput.includes("भेजो") ||
           lowerInput.includes("ok") || lowerInput.includes("ओके")) {
         
-        // Execute the actual transaction
-        try {
-          const amountNum = parseInt(amount);
-          if (amountNum > balance) {
-            const response = "❌ अपर्याप्त राशि। आपके खाते में पर्याप्त पैसे नहीं हैं।";
-            setConversation(prev => [...prev, { message: response, isUser: false, timestamp: "अभी" }]);
-            speak(response);
-            setIsProcessing(false);
-            return;
-          }
-          
-          await createTransaction({
-            type: "debit",
-            amount: amountNum,
-            description: `Sent to ${recipient}`,
-            recipient_name: recipient,
-            recipient_phone: recipientPhone !== "New Contact" ? recipientPhone : undefined,
-          });
-          
-          const response = `✅ ${recipient} को ₹${amountNum.toLocaleString('en-IN')} भेज दिए गए।`;
+        // Check if PIN is set - require PIN verification
+        if (hasPinSet) {
+          const response = "🔒 सुरक्षा के लिए अपना PIN बोलें।";
           setConversation(prev => [...prev, { message: response, isUser: false, timestamp: "अभी" }]);
           speak(response);
-          setStep("success");
-          toast.success("Transaction successful!");
-        } catch (error) {
-          console.error("Transaction failed:", error);
-          const response = "❌ ट्रांसफर विफल। कृपया दोबारा कोशिश करें।";
-          setConversation(prev => [...prev, { message: response, isUser: false, timestamp: "अभी" }]);
-          speak(response);
-          toast.error("Transaction failed");
+          setStep("pin_verify");
+          setIsProcessing(false);
+          return;
         }
+        
+        // If no PIN set, proceed directly (or prompt to set one)
+        await executeTransaction();
       } else if (lowerInput.includes("नहीं") || lowerInput.includes("no") || lowerInput.includes("cancel")) {
         const response = "ट्रांसफर रद्द किया गया।";
         setConversation(prev => [...prev, { message: response, isUser: false, timestamp: "अभी" }]);
@@ -174,7 +165,54 @@ const SendMoney = () => {
     }
     
     setIsProcessing(false);
-  }, [step, recipient, amount, speak]);
+  }, [step, recipient, amount, speak, hasPinSet]);
+
+  // Execute the actual transaction
+  const executeTransaction = useCallback(async () => {
+    try {
+      const amountNum = parseInt(amount);
+      if (amountNum > balance) {
+        const response = "❌ अपर्याप्त राशि। आपके खाते में पर्याप्त पैसे नहीं हैं।";
+        setConversation(prev => [...prev, { message: response, isUser: false, timestamp: "अभी" }]);
+        speak(response);
+        return;
+      }
+      
+      await createTransaction({
+        type: "debit",
+        amount: amountNum,
+        description: `Sent to ${recipient}`,
+        recipient_name: recipient,
+        recipient_phone: recipientPhone !== "New Contact" ? recipientPhone : undefined,
+      });
+      
+      const response = `✅ ${recipient} को ₹${amountNum.toLocaleString('en-IN')} भेज दिए गए।`;
+      setConversation(prev => [...prev, { message: response, isUser: false, timestamp: "अभी" }]);
+      speak(response);
+      setStep("success");
+      toast.success("Transaction successful!");
+    } catch (error) {
+      console.error("Transaction failed:", error);
+      const response = "❌ ट्रांसफर विफल। कृपया दोबारा कोशिश करें।";
+      setConversation(prev => [...prev, { message: response, isUser: false, timestamp: "अभी" }]);
+      speak(response);
+      toast.error("Transaction failed");
+    }
+  }, [amount, balance, recipient, recipientPhone, createTransaction, speak]);
+
+  // Handle PIN verification success
+  const handlePinVerified = useCallback(() => {
+    setStep("confirm");
+    executeTransaction();
+  }, [executeTransaction]);
+
+  // Handle PIN verification cancel
+  const handlePinCancel = useCallback(() => {
+    setStep("confirm");
+    const response = "ट्रांसफर रद्द किया गया।";
+    setConversation(prev => [...prev, { message: response, isUser: false, timestamp: "अभी" }]);
+    speak(response);
+  }, [speak]);
 
   // Watch for transcript changes
   useEffect(() => {
@@ -225,10 +263,28 @@ const SendMoney = () => {
     setConversation([{ message: response, isUser: false, timestamp: "अभी" }]);
   };
 
-  const stepIndex = ["recipient", "amount", "confirm", "success"].indexOf(step);
+  const stepIndex = ["recipient", "amount", "confirm", "pin_verify", "success"].indexOf(step);
+  const displayStepIndex = step === "pin_verify" ? 2 : stepIndex; // Show confirm step during PIN verify
 
   return (
     <div className="min-h-screen bg-background">
+      {/* PIN Setup Modal */}
+      {showPinSetup && (
+        <VoicePinSetup 
+          onComplete={() => setShowPinSetup(false)} 
+          onCancel={() => setShowPinSetup(false)} 
+        />
+      )}
+
+      {/* PIN Verify Modal */}
+      {step === "pin_verify" && (
+        <VoicePinVerify 
+          onSuccess={handlePinVerified}
+          onCancel={handlePinCancel}
+          title="Verify Transfer"
+          description={`₹${parseInt(amount).toLocaleString('en-IN')} भेजने के लिए PIN बोलें`}
+        />
+      )}
       {/* Header */}
       <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-xl border-b border-border">
         <div className="container mx-auto px-4 py-3 sm:py-4">
@@ -313,6 +369,31 @@ const SendMoney = () => {
                   </div>
                 </button>
               ))}
+            </div>
+          </section>
+        )}
+
+        {/* Security PIN Setup Prompt */}
+        {step === "recipient" && hasPinSet === false && (
+          <section className="mb-6 sm:mb-8 animate-fade-in">
+            <div className="glass-card rounded-2xl p-4 sm:p-5 bg-primary/5 border border-primary/20">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <Shield className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-sm text-foreground mb-1">Set Security PIN</h3>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    सुरक्षित लेनदेन के लिए वॉइस PIN सेट करें
+                  </p>
+                  <button
+                    onClick={() => setShowPinSetup(true)}
+                    className="text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
+                  >
+                    Set PIN Now
+                  </button>
+                </div>
+              </div>
             </div>
           </section>
         )}
