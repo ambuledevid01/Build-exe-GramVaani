@@ -247,7 +247,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - **Ayush Jaiswal** - Initial development
 - **Piyush V Verma** - Contributor
 - **Ambule Devid** - Contributor
-- **Sahil Solanki** - Contributor
+- **Sahil Solanki** - Contributor`
 
 ## 🆘 Support
 
