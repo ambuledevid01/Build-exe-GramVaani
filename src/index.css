@@ -1,0 +1,233 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap');
+
+@layer base {
+  :root {
+    /* Warm, trustworthy color palette for financial inclusion */
+    --background: 30 40% 98%;
+    --foreground: 20 25% 15%;
+
+    --card: 30 30% 99%;
+    --card-foreground: 20 25% 15%;
+
+    --popover: 30 30% 99%;
+    --popover-foreground: 20 25% 15%;
+
+    /* Terracotta - warm, approachable primary */
+    --primary: 14 70% 55%;
+    --primary-foreground: 30 40% 98%;
+
+    /* Sage green - security, trust */
+    --secondary: 145 30% 45%;
+    --secondary-foreground: 30 40% 98%;
+
+    /* Soft cream for muted elements */
+    --muted: 30 25% 92%;
+    --muted-foreground: 20 15% 45%;
+
+    /* Golden amber accent */
+    --accent: 38 92% 55%;
+    --accent-foreground: 20 25% 15%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 30 40% 98%;
+
+    --border: 30 20% 88%;
+    --input: 30 20% 88%;
+    --ring: 14 70% 55%;
+
+    --radius: 1rem;
+
+    /* Custom gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(14 70% 55%), hsl(25 75% 50%));
+    --gradient-secondary: linear-gradient(135deg, hsl(145 30% 45%), hsl(155 35% 40%));
+    --gradient-accent: linear-gradient(135deg, hsl(38 92% 55%), hsl(45 90% 50%));
+    --gradient-warm: linear-gradient(180deg, hsl(30 40% 98%), hsl(30 25% 95%));
+
+    /* Shadows */
+    --shadow-soft: 0 4px 20px -4px hsl(20 25% 15% / 0.08);
+    --shadow-medium: 0 8px 30px -6px hsl(20 25% 15% / 0.12);
+    --shadow-glow: 0 0 40px hsl(14 70% 55% / 0.15);
+
+    /* Voice wave colors */
+    --wave-primary: hsl(14 70% 55%);
+    --wave-secondary: hsl(38 92% 55%);
+    --wave-tertiary: hsl(145 30% 45%);
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 20 20% 10%;
+    --foreground: 30 30% 95%;
+
+    --card: 20 18% 14%;
+    --card-foreground: 30 30% 95%;
+
+    --popover: 20 18% 14%;
+    --popover-foreground: 30 30% 95%;
+
+    --primary: 14 65% 58%;
+    --primary-foreground: 20 20% 10%;
+
+    --secondary: 145 28% 48%;
+    --secondary-foreground: 20 20% 10%;
+
+    --muted: 20 15% 20%;
+    --muted-foreground: 30 20% 65%;
+
+    --accent: 38 85% 58%;
+    --accent-foreground: 20 20% 10%;
+
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 30 30% 95%;
+
+    --border: 20 15% 22%;
+    --input: 20 15% 22%;
+    --ring: 14 65% 58%;
+
+    --gradient-warm: linear-gradient(180deg, hsl(20 20% 10%), hsl(20 18% 8%));
+    --shadow-soft: 0 4px 20px -4px hsl(0 0% 0% / 0.3);
+    --shadow-medium: 0 8px 30px -6px hsl(0 0% 0% / 0.4);
+    --shadow-glow: 0 0 40px hsl(14 65% 58% / 0.2);
+
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', 'Noto Sans', system-ui, sans-serif;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Accessibility - larger touch targets */
+  button, a, [role="button"] {
+    min-height: 48px;
+    @apply touch-manipulation;
+  }
+
+  input, select, textarea {
+    min-height: 52px;
+    @apply text-base;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+
+  /* Improved focus states for accessibility */
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-background;
+  }
+}
+
+@layer components {
+  /* Voice wave animation */
+  .voice-wave-bar {
+    @apply bg-primary rounded-full transition-all duration-100;
+    animation: wave 1.2s ease-in-out infinite;
+  }
+
+  .voice-wave-bar:nth-child(1) { animation-delay: 0s; }
+  .voice-wave-bar:nth-child(2) { animation-delay: 0.1s; }
+  .voice-wave-bar:nth-child(3) { animation-delay: 0.2s; }
+  .voice-wave-bar:nth-child(4) { animation-delay: 0.3s; }
+  .voice-wave-bar:nth-child(5) { animation-delay: 0.4s; }
+  .voice-wave-bar:nth-child(6) { animation-delay: 0.5s; }
+  .voice-wave-bar:nth-child(7) { animation-delay: 0.6s; }
+
+  /* Pulse animation for listening state */
+  .pulse-ring {
+    @apply absolute inset-0 rounded-full;
+    animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Glass card effect */
+  .glass-card {
+    @apply backdrop-blur-xl bg-card/80 border border-border/50;
+    box-shadow: var(--shadow-soft);
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+@layer utilities {
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+
+  .shadow-medium {
+    box-shadow: var(--shadow-medium);
+  }
+
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+}
+
+@keyframes wave {
+  0%, 100% {
+    transform: scaleY(0.4);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.2;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
