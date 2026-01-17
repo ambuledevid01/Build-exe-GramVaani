@@ -1,9 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Zap, Phone, Wifi, Droplets, Flame, HelpCircle, CheckCircle2 } from "lucide-react";
 import { VoiceButton } from "@/components/VoiceButton";
 import { VoiceWave } from "@/components/VoiceWave";
 import { ConversationBubble } from "@/components/ConversationBubble";
+import { VoicePinSetup } from "@/components/VoicePinSetup";
+import { VoicePinVerify } from "@/components/VoicePinVerify";
+import { useVoicePin } from "@/hooks/useVoicePin";
+import { useBanking } from "@/hooks/useBanking";
+import { useTextToSpeech } from "@/hooks/useTextToSpeech";
+import { useSpeechToText } from "@/hooks/useSpeechToText";
 import { LucideIcon } from "lucide-react";
 
 interface BillCategory {
@@ -16,14 +22,27 @@ interface BillCategory {
 
 const PayBills = () => {
   const navigate = useNavigate();
-  const [isListening, setIsListening] = useState(false);
+  const { speak, isSpeaking } = useTextToSpeech();
+  const { 
+    isListening, 
+    transcript, 
+    partialTranscript,
+    startListening, 
+    stopListening 
+  } = useSpeechToText();
+  const { hasPinSet, checkPinStatus } = useVoicePin();
+  const { createTransaction, balance } = useBanking();
+  
   const [selectedBill, setSelectedBill] = useState<BillCategory | null>(null);
-  const [step, setStep] = useState<"select" | "details" | "confirm" | "success">("select");
+  const [step, setStep] = useState<"select" | "details" | "confirm" | "pin_verify" | "success">("select");
   const [billAmount] = useState(1250);
+  const [showPinSetup, setShowPinSetup] = useState(false);
+  const lastProcessedTranscript = useRef<string>("");
   const [conversation, setConversation] = useState([
     { message: "कौन सा बिल भरना है? बिजली, मोबाइल, या पानी?", isUser: false, timestamp: "अभी" }
   ]);
 
+  // Bill categories with keywords for voice detection
   const billCategories: BillCategory[] = [
     { id: "electricity", name: "Electricity", nameHindi: "बिजली", icon: Zap, color: "bg-yellow-500" },
     { id: "mobile", name: "Mobile", nameHindi: "मोबाइल", icon: Phone, color: "bg-blue-500" },
@@ -32,28 +51,134 @@ const PayBills = () => {
     { id: "gas", name: "Gas", nameHindi: "गैस", icon: Flame, color: "bg-orange-500" },
   ];
 
-  const handleVoiceToggle = () => {
-    setIsListening(!isListening);
-    if (!isListening) {
-      setTimeout(() => {
-        if (step === "select") {
-          setConversation(prev => [...prev, { message: "बिजली का बिल भरो", isUser: true, timestamp: "अभी" }]);
-          setTimeout(() => {
-            const bill = billCategories.find(b => b.id === "electricity")!;
-            setSelectedBill(bill);
-            setConversation(prev => [...prev, { message: `बिजली बिल ₹${billAmount.toLocaleString('en-IN')} है। 'हाँ' बोलें।`, isUser: false, timestamp: "अभी" }]);
-            setStep("confirm");
-            setIsListening(false);
-          }, 1500);
-        } else if (step === "confirm") {
-          setConversation(prev => [...prev, { message: "हाँ भरो", isUser: true, timestamp: "अभी" }]);
-          setTimeout(() => {
-            setConversation(prev => [...prev, { message: `✅ बिजली बिल ₹${billAmount.toLocaleString('en-IN')} भर दिया।`, isUser: false, timestamp: "अभी" }]);
-            setStep("success");
-            setIsListening(false);
-          }, 1500);
+  // Keywords to detect bill type from voice
+  const billKeywords: Record<string, string[]> = {
+    electricity: ["बिजली", "bijli", "electricity", "electric", "light", "बिज़ली", "लाइट"],
+    mobile: ["मोबाइल", "mobile", "phone", "फ़ोन", "फोन", "recharge", "रिचार्ज"],
+    internet: ["इंटरनेट", "internet", "wifi", "वाईफाई", "broadband", "ब्रॉडबैंड", "नेट"],
+    water: ["पानी", "water", "paani", "जल"],
+    gas: ["गैस", "gas", "cylinder", "सिलेंडर", "lpg", "एलपीजी"],
+  };
+
+  // Execute the actual bill payment
+  const executeBillPayment = async () => {
+    if (!selectedBill) return;
+    
+    try {
+      await createTransaction({
+        type: "bill",
+        amount: billAmount,
+        description: `${selectedBill.name} Bill Payment`,
+        bill_type: selectedBill.id,
+      });
+      
+      setConversation(prev => [...prev, { 
+        message: `✅ ${selectedBill.nameHindi} बिल ₹${billAmount.toLocaleString('en-IN')} भर दिया।`, 
+        isUser: false, 
+        timestamp: "अभी" 
+      }]);
+      speak(`${selectedBill.nameHindi} बिल ${billAmount} रुपये सफलतापूर्वक भर दिया गया।`);
+      setStep("success");
+    } catch (error) {
+      console.error("Bill payment error:", error);
+      setConversation(prev => [...prev, { 
+        message: "❌ बिल भुगतान विफल। कृपया दोबारा प्रयास करें।", 
+        isUser: false, 
+        timestamp: "अभी" 
+      }]);
+      speak("बिल भुगतान विफल। कृपया दोबारा प्रयास करें।");
+    }
+  };
+
+  // Handle PIN verification success
+  const handlePinSuccess = () => {
+    executeBillPayment();
+  };
+
+  useEffect(() => {
+    checkPinStatus();
+  }, [checkPinStatus]);
+
+  // Detect bill type from voice input
+  const detectBillType = useCallback((input: string): BillCategory | null => {
+    const lowerInput = input.toLowerCase();
+    
+    for (const [billId, keywords] of Object.entries(billKeywords)) {
+      for (const keyword of keywords) {
+        if (lowerInput.includes(keyword.toLowerCase())) {
+          return billCategories.find(b => b.id === billId) || null;
         }
-      }, 2000);
+      }
+    }
+    return null;
+  }, []);
+
+  // Check for confirmation keywords
+  const isConfirmation = useCallback((input: string): boolean => {
+    const confirmKeywords = ["हाँ", "हां", "yes", "confirm", "pay", "भरो", "भर दो", "कर दो", "okay", "ok", "ठीक"];
+    const lowerInput = input.toLowerCase();
+    return confirmKeywords.some(keyword => lowerInput.includes(keyword.toLowerCase()));
+  }, []);
+
+  // Process voice input
+  const processVoiceInput = useCallback((input: string) => {
+    if (!input.trim()) return;
+
+    setConversation(prev => [...prev, { message: input, isUser: true, timestamp: "अभी" }]);
+
+    if (step === "select") {
+      const detectedBill = detectBillType(input);
+      
+      if (detectedBill) {
+        setSelectedBill(detectedBill);
+        const response = `${detectedBill.nameHindi} बिल ₹${billAmount.toLocaleString('en-IN')} है। भुगतान के लिए 'हाँ' बोलें।`;
+        setConversation(prev => [...prev, { message: response, isUser: false, timestamp: "अभी" }]);
+        speak(response);
+        setStep("confirm");
+      } else {
+        const response = "कौन सा बिल? बिजली, मोबाइल, पानी, गैस, या इंटरनेट बोलें।";
+        setConversation(prev => [...prev, { message: response, isUser: false, timestamp: "अभी" }]);
+        speak(response);
+      }
+    } else if (step === "confirm" && selectedBill) {
+      if (isConfirmation(input)) {
+        // Check balance
+        if (balance < billAmount) {
+          const response = "अपर्याप्त बैलेंस। कृपया पहले बैलेंस जोड़ें।";
+          setConversation(prev => [...prev, { message: `❌ ${response}`, isUser: false, timestamp: "अभी" }]);
+          speak(response);
+          return;
+        }
+        
+        // Check if PIN is set
+        if (hasPinSet === false) {
+          setShowPinSetup(true);
+          return;
+        }
+        
+        // Go to PIN verification
+        setStep("pin_verify");
+      } else {
+        const response = "भुगतान की पुष्टि के लिए 'हाँ' बोलें, या रद्द करने के लिए 'नहीं' बोलें।";
+        setConversation(prev => [...prev, { message: response, isUser: false, timestamp: "अभी" }]);
+        speak(response);
+      }
+    }
+  }, [step, selectedBill, billAmount, balance, hasPinSet, detectBillType, isConfirmation, speak]);
+
+  // Process transcript when user stops speaking
+  useEffect(() => {
+    if (transcript && transcript !== lastProcessedTranscript.current && !isListening) {
+      lastProcessedTranscript.current = transcript;
+      processVoiceInput(transcript);
+    }
+  }, [transcript, isListening, processVoiceInput]);
+
+  const handleVoiceToggle = () => {
+    if (isListening) {
+      stopListening();
+    } else if (!isSpeaking) {
+      startListening();
     }
   };
 
@@ -67,6 +192,25 @@ const PayBills = () => {
     setStep("confirm");
   };
 
+  // Handle confirm button click (for touch users)
+  const handleConfirmPayment = () => {
+    // Check balance
+    if (balance < billAmount) {
+      setConversation(prev => [...prev, { message: "❌ अपर्याप्त बैलेंस।", isUser: false, timestamp: "अभी" }]);
+      speak("अपर्याप्त बैलेंस। कृपया बैलेंस जोड़ें।");
+      return;
+    }
+    
+    // Check if PIN is set
+    if (hasPinSet === false) {
+      setShowPinSetup(true);
+      return;
+    }
+    
+    // Go to PIN verification
+    setStep("pin_verify");
+  };
+
   const handleNewPayment = () => {
     setStep("select");
     setSelectedBill(null);
@@ -75,6 +219,28 @@ const PayBills = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Voice PIN Setup Modal */}
+      {showPinSetup && (
+        <VoicePinSetup 
+          onComplete={() => {
+            setShowPinSetup(false);
+            speak("PIN सेट हो गया। अब बिल भुगतान जारी रखें।");
+            setStep("pin_verify");
+          }} 
+          onCancel={() => setShowPinSetup(false)} 
+        />
+      )}
+      
+      {/* Voice PIN Verify Modal */}
+      {step === "pin_verify" && selectedBill && (
+        <VoicePinVerify
+          onSuccess={handlePinSuccess}
+          onCancel={() => setStep("confirm")}
+          title="Verify Bill Payment"
+          description={`${selectedBill.nameHindi} बिल ₹${billAmount.toLocaleString('en-IN')} के लिए अपना PIN बोलें।`}
+        />
+      )}
+
       {/* Header */}
       <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-xl border-b border-border">
         <div className="container mx-auto px-4 py-3 sm:py-4">
@@ -168,6 +334,14 @@ const PayBills = () => {
                 <p className="text-xs sm:text-sm text-muted-foreground mb-2">Amount Due</p>
                 <p className="text-3xl sm:text-display text-foreground font-bold">₹{billAmount.toLocaleString('en-IN')}</p>
               </div>
+              
+              {/* Confirm Button */}
+              <button
+                onClick={handleConfirmPayment}
+                className="w-full mt-4 py-3.5 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 active:bg-primary/80 transition-colors touch-manipulation"
+              >
+                Pay ₹{billAmount.toLocaleString('en-IN')}
+              </button>
             </div>
           </section>
         )}
